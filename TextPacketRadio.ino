@@ -12,6 +12,9 @@ unsigned long t9_last_key_time;
 int t9_max_input_interval = 1000;
 long t9_number_input;
 
+String menu_message;
+int message_issue_time;
+
 RH_NRF24 nrf24(9, 10);
 int nrf_channel;
 RH_NRF24::DataRate nrf_data_rate;
@@ -73,17 +76,19 @@ void reset_t9_number_input();
 
 void initialize_display();
 
-void display_text(char text[]);
+void display_text(const char *text);
 
 void refresh_display();
-
-bool is_text_input_state();
 
 void t9_text_input_handle(char key);
 
 void t9_number_input_handle(char key);
 
 int get_keypad_number(char key);
+
+void reset_menu_message();
+
+void issue_message(String message);
 
 void setup() {
     nrf_transmit_power = RH_NRF24::TransmitPower0dBm;
@@ -99,6 +104,7 @@ void setup() {
 
     keypad.addEventListener(keypadEvent); //new event
 
+    reset_menu_message();
     reset_t9_text_input();
     reset_t9_number_input();
 
@@ -110,6 +116,10 @@ void loop() {
     delay(10);
     refresh_display();
     Serial.println(current_menu_state);
+}
+
+void reset_menu_message() {
+    message_issue_time = -100000;
 }
 
 
@@ -149,8 +159,12 @@ void keypadEvent(KeypadEvent key) {
                     case 1:
                     case 2:
                         nrf_channel = nrf_channel_options_value[num - 1];
-                        if (!nrf24.setChannel(nrf_channel))
-                            Serial.println("setChannel failed");
+                        
+                        if (!nrf24.setChannel(nrf_channel)){
+                            issue_message(String("Failed to set the channel."));
+                        } else {
+                            issue_message(String("Channel set to option ") + String(num) + String(" successfully."));
+                        }
                     case 0:
                         current_menu_state = Settings;
                 }
@@ -215,6 +229,11 @@ void keypadEvent(KeypadEvent key) {
     }
 }
 
+void issue_message(String message) {
+    menu_message = message;
+    message_issue_time = millis();
+}
+
 char get_cycle_for_key(char key) {
     char cycle;
     if (key == 'P' ||
@@ -261,35 +280,39 @@ void initialize_display() {
 
 void refresh_display() {
     String text;
-    switch (current_menu_state) {
-        case MainMenu:
-            text = "Main Menu!\n\n1.Settings\n2.Send Text\n3.Receive Text";
-            break;
-        case Settings:
-            text = "Settings: \n\n1.Data Rate\n2.TX Power\n3.Channel\n0. Back";
-            break;
-        case SettingTXPower:
-            text = "TX Power: \n1. 0 dBm\n2. -6 dBm\n3. -12 dBm\n4. -18 dBm\n0. Back";
-            break;
-        case SettingDataRateSelect:
-            text = "Data Rate: \n\n1. 1 Mbps\n2. 2 Mbps\n3. 250 kbps\n0. Back";
-            break;
-        case SettingChannelSelect:
-            text = "Channel: \n\n1. 1 \n2. 2\n0. Back";
-            break;
-        case SendText:
-            text = String("Enter Message:\n\n") + String(t9_text_input);
-            break;
-        case ReceiveText:
-            break;
-        case GetDestAddr:
-            text = String("Enter Dest Address:\n\n") + String(t9_number_input);
-            break;
-        case SendingMessage:
-            text = "Sending Message! \n\nPlease Wait";
-            break;
-        default:
-            text = "invalid state! please implement this";
+    if(millis() - message_issue_time < t9_max_input_interval){
+        text = menu_message;
+    } else {
+        switch (current_menu_state) {
+            case MainMenu:
+                text = "Main Menu!\n\n1.Settings\n2.Send Text\n3.Receive Text";
+                break;
+            case Settings:
+                text = "Settings: \n\n1.Data Rate\n2.TX Power\n3.Channel\n0. Back";
+                break;
+            case SettingTXPower:
+                text = "TX Power: \n1. 0 dBm\n2. -6 dBm\n3. -12 dBm\n4. -18 dBm\n0. Back";
+                break;
+            case SettingDataRateSelect:
+                text = "Data Rate: \n\n1. 1 Mbps\n2. 2 Mbps\n3. 250 kbps\n0. Back";
+                break;
+            case SettingChannelSelect:
+                text = "Channel: \n\n1. 1 \n2. 2\n0. Back";
+                break;
+            case SendText:
+                text = String("Enter Message:\n\n") + String(t9_text_input);
+                break;
+            case ReceiveText:
+                break;
+            case GetDestAddr:
+                text = String("Enter Dest Address:\n\n") + String(t9_number_input);
+                break;
+            case SendingMessage:
+                text = "Sending Message! \n\nPlease Wait";
+                break;
+            default:
+                text = "invalid state! please implement this";
+        }
     }
     display_text(text.c_str());
 }
@@ -313,7 +336,6 @@ void t9_text_input_handle(char key) {
             char cycle = get_cycle_for_key(key);
             char currentKey = t9_last_key + (t9_current_key_index % cycle);
             t9_text_input[t9_text_input_index] = currentKey;
-
         } else {
             t9_text_input_index++;
             t9_text_input[t9_text_input_index] = key;
