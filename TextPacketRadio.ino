@@ -12,8 +12,8 @@ unsigned long t9_last_key_time;
 int t9_max_input_interval = 1000;
 long t9_number_input;
 
-String menu_message;
-int message_issue_time;
+String notification_text;
+int notification_issue_time;
 
 RH_NRF24 nrf24(9, 10);
 int nrf_channel;
@@ -88,7 +88,7 @@ int get_keypad_number(char key);
 
 void reset_menu_message();
 
-void issue_message(String message);
+void send_notif(String notif);
 
 void setup() {
     nrf_transmit_power = RH_NRF24::TransmitPower0dBm;
@@ -119,7 +119,7 @@ void loop() {
 }
 
 void reset_menu_message() {
-    message_issue_time = -100000;
+    notification_issue_time = -100000;
 }
 
 
@@ -161,9 +161,9 @@ void keypadEvent(KeypadEvent key) {
                         nrf_channel = nrf_channel_options_value[num - 1];
                         
                         if (!nrf24.setChannel(nrf_channel)){
-                            issue_message(String("Failed to set the channel."));
+                            send_notif(String("Failed to set the channel."));
                         } else {
-                            issue_message(String("Channel set to option ") + String(num) + String(" successfully."));
+                            send_notif(String("Channel set to option ") + String(num) + String(" successfully."));
                         }
                     case 0:
                         current_menu_state = Settings;
@@ -229,9 +229,9 @@ void keypadEvent(KeypadEvent key) {
     }
 }
 
-void issue_message(String message) {
-    menu_message = message;
-    message_issue_time = millis();
+void send_notif(String notif) {
+    notification_text = notif;
+    notification_issue_time = millis();
 }
 
 char get_cycle_for_key(char key) {
@@ -280,8 +280,9 @@ void initialize_display() {
 
 void refresh_display() {
     String text;
-    if(millis() - message_issue_time < t9_max_input_interval){
-        text = menu_message;
+
+    if(millis() - notification_issue_time < t9_max_input_interval){
+        text = notification_text;
     } else {
         switch (current_menu_state) {
             case MainMenu:
